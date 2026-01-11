@@ -3,27 +3,29 @@
 > **Your Second Brain, Reimagined.**
 > *Local AI. Infinite Memory. Zero Privacy Compromise.*
 
-![Engram Logo](/engram-ui/public/logo.png)
+<p align="center">
+  <img src="engram-ui/public/logo.png" width="200" alt="Engram Logo">
+</p>
 
 ## What is Engram?
 
-Most note-taking apps are just digital cabinets—you throw stuff in, and hope you find it later.
+Traditional note-taking apps are static digital cabinets—you throw information in and hope to find it later.
 
-**Engram is different.** It's a thinking partner.
+**Engram is different.** It is your active thinking partner.
 
-It uses local AI (Llama 3.1) to **read, understand, and organize** your thoughts as you type them. You just dump your brain; Engram handles the filing. It connects ideas, finds relationships, and lets you "chat" with your own knowledge base.
+It uses local AI (Llama 3.1) to **read, understand, and organize** your thoughts in real-time. You simply dump your brain; Engram handles the filing, connects ideas, and lets you "chat" with your own knowledge base.
 
-It’s built for developers, thinkers, and anyone who wants to build a massive personal library without the manual labor.
+It is built for developers, thinkers, and anyone who wants to build a massive personal library without the manual labor.
 
 ### Why you'll love it:
 
-- 🧠 **Auto-Categorziation**:  Type "Fix the API bug on auth service," and it automatically files it under `Work/Engineering` and tags it `#bug` `#backend`. You don't do a thing.
-- 🔍 **Semantic Search**: Forget keywords. Ask "What did I decide about the database migration last week?" and it finds the answer, even if you never used those exact words.
-- 🔒 **100% Local**: No cloud. No subscription APIs. Your data hits your local disk and stays there.
+- 🧠 **Auto-Categorization**:  Type "Fix the API bug on auth service," and it automatically files it under `Work/Engineering` and tags it `#bug` `#backend`. Zero manual effort required.
+- 🔍 **Semantic Search**: Forget keywords. Ask "What did I decide about the database migration last week?" and it retrieves the exact context, even if you phrased it differently.
+- 🔒 **100% Local**: No cloud. No subscription APIs. Your data remains securely on your local machine.
 
 ## 🚀 Get Started
 
-We've made it incredibly simple to start. 
+Getting up and running is effortless. 
 
 1. **Install Prerequisites**: You need Python, Node, and Ollama. (See [SETUP.md](./SETUP.md) for details).
 2. **Run One Command**:
@@ -41,6 +43,3 @@ Want to know how the magic happens?
 - [**Setup Guide**](./SETUP.md): Detailed installation instructions.
 - [**Architecture & Tech Stack**](./ARCHITECTURE.md): A deep dive into the vector DB, React UI, and Python backend (plus diagrams!).
 
-## License
-
-MIT License. Hack away.
