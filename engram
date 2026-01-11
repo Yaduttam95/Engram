@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import time
+import webbrowser
+import signal
+import platform
+
+# Configuration
+BACKEND_PORT = 8000
+FRONTEND_PORT = 5173
+HOST = "localhost"
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Check for venv in likely places
+VENV_PYTHON = os.path.join(ROOT_DIR, "venv", "bin", "python")
+if not os.path.exists(VENV_PYTHON):
+     # Handle win/non-standard venv just in case, though user is on mac
+    pass
+
+def get_python_command():
+    if os.path.exists(VENV_PYTHON):
+        return VENV_PYTHON
+    return sys.executable
+
+def start_backend():
+    print("Starting Engram Cortex (Backend)...")
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    cmd = [get_python_command(), "-m", "src.server.api"]
+    return subprocess.Popen(cmd, cwd=ROOT_DIR, env=env)
+
+def start_frontend():
+    print("Starting Engram UI (Frontend)...")
+    ui_dir = os.path.join(ROOT_DIR, "engram-ui")
+    
+    # check if node_modules exists
+    if not os.path.exists(os.path.join(ui_dir, "node_modules")):
+        print("Installing frontend dependencies (this happens only once)...")
+        subprocess.run(["npm", "install"], cwd=ui_dir, check=True)
+    
+    cmd = ["npm", "run", "dev"]
+    # We pipe stdout to avoid cluttering the main terminal too much, OR we let it flow.
+    # Let's let it flow but identify it. Actually, letting it flow is best for debugging.
+    return subprocess.Popen(cmd, cwd=ui_dir)
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] != "run":
+        print("Usage: ./engram run")
+        sys.exit(1)
+
+    backend_process = None
+    frontend_process = None
+
+    try:
+        backend_process = start_backend()
+        frontend_process = start_frontend()
+
+        print(f"Engram is starting...")
+        print("Waiting for services to initialize...")
+        
+        # Simple wait
+        time.sleep(3)
+
+        url = f"http://{HOST}:{FRONTEND_PORT}"
+        print(f"Opening {url}")
+        webbrowser.open(url)
+
+        print("\nEngram is running! Press Ctrl+C to stop.\n")
+        
+        # Keep alive and monitor processes
+        while True:
+            time.sleep(1)
+            if backend_process.poll() is not None:
+                print("Backend process exited unexpectedly.")
+                break
+            if frontend_process.poll() is not None:
+                print("Frontend process exited unexpectedly.")
+                break
+
+    except KeyboardInterrupt:
+        print("\nStopping Engram...")
+    finally:
+        if backend_process:
+            print("Terminating backend...")
+            backend_process.terminate()
+            try:
+                backend_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                backend_process.kill()
+                
+        if frontend_process:
+            print("Terminating frontend...")
+            frontend_process.terminate()
+            try:
+                frontend_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                frontend_process.kill()
+        
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()

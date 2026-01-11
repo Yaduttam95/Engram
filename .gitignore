@@ -1,0 +1,26 @@
+# System
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+logs/
+
+# Engram Specific
+config.json
+/engram_memory/
+
+# Node (in case root npm is ever used)
+node_modules/
