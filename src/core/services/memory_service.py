@@ -8,10 +8,13 @@ import os
 
 logger = setup_logger(__name__)
 
+from src.core.agent import BrainAgent
+
 class MemoryService:
-    def __init__(self, db: VectorDB, writer: ObsidianWriter):
+    def __init__(self, db: VectorDB, writer: ObsidianWriter, agent: BrainAgent = None):
         self.db = db
         self.writer = writer
+        self.agent = agent
 
     def save_memory(self, data: Dict) -> str:
         """
@@ -55,31 +58,13 @@ class MemoryService:
             
         return doc_id
 
-    def update_memory_content(self, doc_id: str, new_content: str) -> str:
-        """
-        Updates the content of a memory in FS and re-indexes in DB.
-        """
-        # Update File System
-        self.writer.edit_content(doc_id, new_content)
-        
-        # Update DB (Re-embed)
-        existing = self.db.collection.get(ids=[doc_id])
-        if not existing['ids']:
-             raise ValueError("Memory not found in DB")
-             
-        meta = existing['metadatas'][0]
-        
-        self.db.add(
-            content=new_content,
-            metadata=meta,
-            doc_id=doc_id
-        )
-        return doc_id
 
-    def reindex_vault(self):
+
+    async def reindex_vault(self):
         """
         Smart Index: Scans Vault and checks for modified files.
         Only re-embeds changed or new files.
+        Auto-categorizes raw files if Agent is available.
         """
         import json
         import re
@@ -114,34 +99,92 @@ class MemoryService:
                 
             # --- PROCESS FILE ---
             try:
+                # logger.info(f"Processing modified file: {path}") # Optional verbose log
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                 
-                # Parse Frontmatter
-                frontmatter_match = re.search(r'^---\n(.*?)\n---', content, re.DOTALL)
+                # Parse Frontmatter (Tolerant of missing frontmatter)
+                frontmatter_match = re.search(r'^\s*---\s*\n(.*?)\n---\s*\n', content, re.DOTALL | re.MULTILINE)
+                
                 metadata = {}
+                body = content
+                
                 if frontmatter_match:
                     try:
-                        metadata = yaml.safe_load(frontmatter_match.group(1))
+                        metadata = yaml.safe_load(frontmatter_match.group(1)) or {}
+                        # Remove frontmatter from body for indexing
+                        body = re.sub(r'^\s*---\s*\n(.*?)\n---\s*\n', '', content, flags=re.DOTALL | re.MULTILINE).strip()
                     except Exception as e:
                         logger.warning(f"Failed to parse frontmatter for {filename}: {e}")
-                
-                body = re.sub(r'^---\n(.*?)\n---', '', content, flags=re.DOTALL).strip()
-                
+                else:
+                    # --- AUTO-TAGGING FOR RAW FILES ---
+                    if self.agent:
+                         logger.info(f"Auto-tagging raw file: {filename}")
+                         try:
+                             # Use Agent to analyze content
+                             analysis = await self.agent.process(content)
+                             if analysis:
+                                 metadata = {
+                                     "title": analysis.get("title", path.stem),
+                                     "category": analysis.get("category", "Inbox"),
+                                     "tags": analysis.get("tags", []),
+                                     "created": datetime.fromtimestamp(path.stat().st_ctime).strftime('%Y-%m-%d %H:%M:%S'),
+                                     "status": "active"
+                                 }
+                                 
+                                 # Rewrite File with Frontmatter
+                                 # We keep the file in its current location, just prepend frontmatter
+                                 new_file_content = f"---\n"
+                                 for k, v in metadata.items():
+                                     new_file_content += f"{k}: {json.dumps(v) if isinstance(v, list) else v}\n"
+                                 new_file_content += "---\n\n" + content
+                                 
+                                 with open(path, "w", encoding="utf-8") as f:
+                                     f.write(new_file_content)
+                                     
+                                 logger.info(f"Rewrite complete for {filename}")
+                                 # Update body/content for indexing
+                                 body = content 
+                             else:
+                                 logger.warning(f"Agent failed to tag {filename}")
+                         except Exception as agent_err:
+                             logger.error(f"Auto-tagging error for {filename}: {agent_err}")
+                             
+                    else:
+                        logger.debug(f"{filename} has no frontmatter and no agent available.")
+
+                # --- INFER METADATA IF STILL MISSING (Fallback) ---
+                title = metadata.get("title")
+                if not title:
+                     h1_match = re.search(r'^#\s+(.*)', body, re.MULTILINE)
+                     title = h1_match.group(1).strip() if h1_match else path.stem.replace("_", " ").title()
+
+                category = metadata.get("category")
+                if not category:
+                    try:
+                        rel_path = path.relative_to(VAULT_ROOT)
+                        category = str(rel_path.parent) if str(rel_path.parent) != "." else "Inbox"
+                    except: category = "External"
+                    
+                tags = metadata.get("tags", [])
+                created = metadata.get("created", datetime.fromtimestamp(path.stat().st_ctime).strftime('%Y-%m-%d %H:%M:%S'))
+
+                logger.debug(f"Indexing {filename}: Title='{title}', Cat='{category}'")
+
                 self.db.add(
                     content=body,
                     metadata={
                         "filename": filename,
-                        "category": metadata.get("category", "Unknown"),
-                        "title": metadata.get("title", path.stem),
-                        "tags": str(metadata.get("tags", [])),
-                        "created": str(metadata.get("created", datetime.fromtimestamp(path.stat().st_ctime).strftime('%Y-%m-%d %H:%M:%S')))
+                        "category": category,
+                        "title": title,
+                        "tags": str(tags),
+                        "created": str(created)
                     },
                     doc_id=filename
                 )
                 
                 # Update State
-                index_state[filename] = mtime
+                index_state[filename] = path.stat().st_mtime # Update with fresh mtime after rewrite
                 nodes_updated += 1
                 logger.info(f"Index Updated: {filename}")
                 

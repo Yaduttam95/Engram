@@ -50,17 +50,27 @@ class VectorDB:
 
         results = self.collection.query(
             query_embeddings=[embedding],
-            n_results=n_results
+            n_results=n_results,
+            include=['documents', 'metadatas', 'distances']
         )
         
-        # Zip documents and metadatas
+        # Zip documents and metadatas, filtering by distance
         output = []
         if results['documents']:
             for i in range(len(results['documents'][0])):
+                dist = results['distances'][0][i]
+                logger.info(f"Search Result: {results['metadatas'][0][i].get('title')} (Distance: {dist})")
+                
+                # Filter out irrelevant results 
+                # Adjusted threshold to 400 based on observed L2 distances
+                if dist > 400:
+                    continue
+                    
                 output.append({
                     "id": results['ids'][0][i],
                     "content": results['documents'][0][i],
-                    "metadata": results['metadatas'][0][i]
+                    "metadata": results['metadatas'][0][i],
+                    "distance": dist
                 })
 
         return output

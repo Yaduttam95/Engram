@@ -25,7 +25,8 @@ def get_memory_service():
     """Dependency Provider for MemoryService"""
     return MemoryService(
         db=get_vector_db(), 
-        writer=get_obsidian_writer()
+        writer=get_obsidian_writer(),
+        agent=get_brain_agent()
     )
 
 def get_analysis_service():

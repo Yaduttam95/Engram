@@ -11,9 +11,58 @@ class SystemService:
         self.db = db
 
     def reset_brain(self):
+        """
+        Wipes the database and deletes all memory files from the Vault.
+        """
+        # 1. Reset DB
         if self.db:
             self.db.reset()
-        return {"status": "reset_complete"}
+        
+        # 2. Delete Files from Vault (Safe Delete)
+        deleted_count = 0
+        try:
+            # We want to delete all visible files/folders in VAULT_ROOT
+            # But preserve .engram or other hidden system folders if essential? 
+            # Actually, "Wipe Everything" simplifies logic: Delete all MD files and empty folders.
+            
+            # Walk top-down to find files
+            for root, dirs, files in os.walk(VAULT_ROOT, topdown=False):
+                # Skip hidden directories like .engram inside the walk
+                if ".engram" in root: continue
+                
+                # Delete Files
+                for name in files:
+                    if name.startswith("."): continue # Skip hidden files? Or maybe delete them too? Let's stick to visible/md for safety.
+                    file_path = Path(root) / name
+                    if file_path.suffix == ".md":
+                        try:
+                            os.remove(file_path)
+                            deleted_count += 1
+                        except Exception as e:
+                            logger.error(f"Failed to delete {file_path}: {e}")
+
+                # Delete Empty Directories (after files are gone)
+                # Note: os.walk with topdown=False visits children before parents
+                # so we can try removing directories if they are empty.
+                if root == str(VAULT_ROOT): continue # Don't delete root
+                
+                try:
+                    # check if dir is empty (ignoring hidden files potentially?)
+                    # If we only deleted .md files, other files might remain.
+                    # If the user wants a TOTAL wipe, we should delete everything except .engram.
+                    
+                    # More aggressive wipe:
+                    dir_path = Path(root)
+                    if dir_path.exists() and not any(dir_path.iterdir()):
+                        dir_path.rmdir()
+                except Exception as e:
+                     pass # Directory might not be empty
+
+        except Exception as e:
+            logger.error(f"Failed to wipe vault files: {e}")
+
+        logger.info(f"Brain wipe complete. Deleted {deleted_count} files.")
+        return {"status": "reset_complete", "deleted_files": deleted_count}
 
     def get_vault_structure(self):
         def build_tree(path: Path):

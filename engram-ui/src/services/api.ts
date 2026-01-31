@@ -11,10 +11,7 @@ const api = {
             const res = await axios.delete(`${API_URL}/delete/${id}`);
             return res.data;
         },
-        update: async (id: string, content: string) => {
-            const res = await axios.put(`${API_URL}/update/${id}`, { content });
-            return res.data;
-        },
+
         reindex: async () => {
              const res = await axios.post(`${API_URL}/reindex`);
              return res.data;

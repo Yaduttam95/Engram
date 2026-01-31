@@ -9,7 +9,17 @@ from src.core.logger import setup_logger
 
 logger = setup_logger("server")
 
-app = FastAPI(title="Engram Server", version="1.0.0")
+from contextlib import asynccontextmanager
+from src.core.config import init_folders
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure folders exist on startup
+    init_folders()
+    logger.info("System initialized.")
+    yield
+
+app = FastAPI(title="Engram Server", version="1.0.0", lifespan=lifespan)
 
 # Global Error Handler
 @app.exception_handler(Exception)

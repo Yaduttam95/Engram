@@ -6,17 +6,10 @@ from .config import VAULT_ROOT
 class ObsidianWriter:
     def save_note(self, content: str, metadata: dict):
         """
-        Writes the markdown file to the correct folder based on Category.
-        Creates the folder dynamically if it doesn't exist.
+        Writes the markdown file to the Vault Root.
         """
-        # 1. Determine Target Folder
-        category = metadata.get("category", "Inbox")
-        # Sanitize category to be a valid path (allow slashes for subfolders)
-        safe_category = "".join(c for c in category if c.isalnum() or c in (' ', '_', '-', '/')).strip()
-        target_folder = VAULT_ROOT / safe_category
-        
-        # Auto-create the folder (and parents)
-        target_folder.mkdir(parents=True, exist_ok=True)
+        # 1. Target is always Root
+        target_folder = VAULT_ROOT
         
         # 2. Create Filename (Sanitized Title + Date)
         safe_title = "".join(c for c in metadata['title'] if c.isalnum() or c in (' ', '_', '-')).rstrip()
@@ -36,9 +29,6 @@ created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 status: active
 ---
 
-# {metadata['title']}
-
-## Summary
 {content}
 
 ## Original Content
@@ -91,34 +81,4 @@ status: active
             
         return found_path
 
-    def edit_content(self, filename: str, new_content: str):
-        """
-        Overwrites the content of a note (preserving frontmatter ideally, but for now simplistic).
-        Actually, we should preserve frontmatter.
-        """
-        found_path = None
-        for path in VAULT_ROOT.rglob(filename):
-            found_path = path
-            break
-            
-        if not found_path:
-            raise FileNotFoundError(f"Note {filename} not found in vault.")
 
-        # Read existing to preserve frontmatter
-        with open(found_path, "r", encoding="utf-8") as f:
-            old_full_content = f.read()
-
-        import re
-        frontmatter_match = re.search(r'^---\n(.*?)\n---', old_full_content, re.DOTALL)
-        
-        if frontmatter_match:
-            frontmatter = frontmatter_match.group(0)
-            # Replace body but preserve frontmatter
-            final_content = f"{frontmatter}\n\n{new_content}"
-        else:
-            final_content = new_content
-            
-        with open(found_path, "w", encoding="utf-8") as f:
-            f.write(final_content)
-            
-        return found_path

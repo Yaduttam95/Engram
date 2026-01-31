@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Folder, Brain, Sparkles, Check, RefreshCw, Moon, Sun } from 'lucide-react';
+import { Folder, Brain, Sparkles, Check, RefreshCw } from 'lucide-react';
 import { API_URL } from '../constants';
 
 
@@ -46,7 +46,7 @@ const Settings = () => {
         setLoading(true);
         try {
             const res = await axios.post(`${API_URL}/reindex`);
-            setNotification({ type: 'success', msg: `Re-index complete! processed ${res.data.count} memories.` });
+            setNotification({ type: 'success', msg: `Re-index complete! processed ${res.data.updated} memories.` });
             setTimeout(() => setNotification(null), 5000);
         } catch(e) {
             setNotification({ type: 'error', msg: "Re-index failed." });

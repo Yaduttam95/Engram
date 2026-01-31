@@ -1,264 +1,265 @@
 import { useState, useEffect, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Sparkles, Network, X, Edit2, Save } from 'lucide-react';
+import { X, Edit2, Save, Trash2, Search, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import api from '../services/api';
 
 const Graph = () => {
+    // 1. Core State
     const [graphData, setGraphData] = useState({ nodes: [], links: [] });
-    const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
     const [selectedNode, setSelectedNode] = useState<any>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+    
+    
+    // Sidebar Edit State
+    // const [isEditing, setIsEditing] = useState(false); // Removed
+    // const [editContent, setEditContent] = useState(""); // Removed
+    const [notification, setNotification] = useState<{type: 'success'|'error', msg: string} | null>(null);
+
+    // 2. Refs
+    const containerRef = useRef<HTMLDivElement>(null);
+    const graphContainerRef = useRef<HTMLDivElement>(null);
     const fgRef = useRef<any>(null);
+
+    // 3. Init: Fetch & Resize
+    useEffect(() => {
+        fetchGraph();
+    }, []);
+
+    // Observer for the layout change (when sidebars open/close)
+    useEffect(() => {
+        if (!graphContainerRef.current) return;
+        const resizeObserver = new ResizeObserver(() => {
+            if (graphContainerRef.current) {
+                setDimensions({
+                    width: graphContainerRef.current.clientWidth,
+                    height: graphContainerRef.current.clientHeight
+                });
+            }
+        });
+        resizeObserver.observe(graphContainerRef.current);
+        return () => resizeObserver.disconnect();
+    }, [graphContainerRef]);
 
     const fetchGraph = async () => {
         try {
             const data = await api.graph.get();
             setGraphData(data);
-        } catch (e) {
-            console.error("Failed to load graph", e);
-        }
+        } catch (e) { console.error(e); }
     };
 
-    useEffect(() => {
-        fetchGraph();
-    }, []);
-
-    useEffect(() => {
-        if (!containerRef) return;
-        const resizeObserver = new ResizeObserver(() => {
-            setDimensions({
-                width: containerRef.clientWidth,
-                height: containerRef.clientHeight
-            });
-        });
-        resizeObserver.observe(containerRef);
-        return () => resizeObserver.disconnect();
-    }, [containerRef]);
-
-    const handleNodeClick = (node: any) => {
+    // 4. Interaction Handlers
+    const handleNodeSelect = (node: any) => {
         setSelectedNode(node);
+        // setIsEditing(false); // Removed
+        
+        // Center Graph on Node
         fgRef.current?.centerAt(node.x, node.y, 1000);
         fgRef.current?.zoom(4, 2000);
     };
 
-    const [notification, setNotification] = useState<{type: 'confirm'|'success'|'error', msg: string} | null>(null);
-    const [isEditing, setIsEditing] = useState(false);
-    const [editContent, setEditContent] = useState("");
 
-    useEffect(() => {
-        setIsEditing(false);
-        setEditContent("");
-    }, [selectedNode]);
 
     const handleDelete = async () => {
         if (!selectedNode) return;
+        if (!confirm("Are you sure you want to delete this memory?")) return;
         try {
             await api.memories.delete(selectedNode.id);
-            setNotification({ type: 'success', msg: "Memory deleted." });
             setSelectedNode(null);
-            fetchGraph();
+            fetchGraph(); // Reload graph
+            setNotification({ type: 'success', msg: "Memory deleted." });
             setTimeout(() => setNotification(null), 3000);
         } catch(e) {
-            setNotification({ type: 'error', msg: "Failed to delete" });
+            setNotification({ type: 'error', msg: "Delete failed." });
         }
     };
 
-    const handleSave = async () => {
-        if (!selectedNode) return;
-        try {
-            await api.memories.update(selectedNode.id, editContent);
-            setSelectedNode({ ...selectedNode, summary: editContent });
-            setNotification({ type: 'success', msg: "Saved." });
-            setIsEditing(false);
-            setTimeout(() => setNotification(null), 3000);
-            fetchGraph();
-        } catch(e) {
-            setNotification({ type: 'error', msg: "Save failed" });
-        }
-    };
+    // Filter nodes for the list
+    const filteredNodes = graphData.nodes.filter((n: any) => 
+        n.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (n.group && n.group.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
     return (
-        <div ref={setContainerRef} className="flex-1 bg-background relative overflow-hidden h-full font-sans">
-             
-             {/* Simple Header */}
-             <div className="absolute top-6 left-6 z-10 p-4 rounded-lg bg-card border border-border shadow-sm flex items-center gap-4">
-                <h2 className="text-lg font-semibold text-primary">Cortex Graph</h2>
-                <div className="text-xs font-mono text-text-secondary flex items-center gap-2">
-                    <span>{graphData.nodes.length} N</span>
-                    <span className="w-1 h-1 rounded-full bg-border" />
-                    <span>{graphData.links.length} L</span>
-                    <button onClick={fetchGraph} className="hover:text-accent transition-colors ml-1"><Sparkles size={12}/></button>
+        <div className="flex h-full w-full overflow-hidden bg-background">
+            
+            {/* LEFT SIDEBAR: LIST */}
+            <div className="w-[300px] border-r border-border bg-card flex flex-col z-20 flex-shrink-0">
+                <div className="p-4 border-b border-border bg-secondary/10">
+                    <h2 className="font-semibold text-primary mb-3 flex items-center gap-2">
+                        <FileText size={18}/> Memories
+                    </h2>
+                    <div className="relative">
+                        <Search size={14} className="absolute left-3 top-2.5 text-text-secondary"/>
+                        <input 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Filter memories..."
+                            className="w-full bg-background border border-border rounded-lg pl-9 pr-3 py-2 text-sm outline-none focus:border-accent transition-colors"
+                        />
+                    </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2">
+                    {filteredNodes.length === 0 ? (
+                        <div className="text-center p-8 text-text-secondary text-sm">No memories found.</div>
+                    ) : (
+                        <div className="space-y-1">
+                            {filteredNodes.map((node: any) => (
+                                <button 
+                                    key={node.id}
+                                    onClick={() => handleNodeSelect(node)}
+                                    className={`w-full text-left p-3 rounded-lg flex flex-col gap-1 transition-all ${
+                                        selectedNode?.id === node.id 
+                                        ? 'bg-accent/10 border border-accent/20' 
+                                        : 'hover:bg-secondary/50 border border-transparent'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between w-full">
+                                        <span className={`font-medium truncate text-sm ${selectedNode?.id === node.id ? 'text-accent' : 'text-primary'}`}>{node.name}</span>
+                                        {selectedNode?.id === node.id && <div className="w-1.5 h-1.5 rounded-full bg-accent"/>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider bg-secondary px-1.5 py-0.5 rounded">{node.group}</span>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                
+                <div className="p-3 border-t border-border text-xs text-text-secondary text-center">
+                    {graphData.nodes.length} total nodes
                 </div>
             </div>
 
-            {/* Notifications */}
-             <AnimatePresence>
-                 {notification && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute bottom-6 left-6 z-50"
-                    >
-                        {notification.type === 'confirm' ? (
-                             <div className="bg-card border border-border p-4 rounded-lg shadow-xl w-72">
-                                <h3 className="text-sm font-semibold text-primary mb-1">Delete this memory?</h3>
-                                <p className="text-text-secondary text-xs mb-3">This cannot be undone.</p>
-                                <div className="flex gap-2 justify-end">
-                                    <button onClick={() => setNotification(null)} className="px-3 py-1.5 text-xs text-text-secondary hover:bg-secondary rounded-md">Cancel</button>
-                                    <button onClick={handleDelete} className="px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-md">Delete</button>
-                                </div>
-                             </div>
-                        ) : (
-                            <div className={`px-4 py-2 rounded-md shadow-lg border text-sm font-medium flex items-center gap-2 ${notification.type === 'success' ? 'bg-card border-green-500/20 text-green-500' : 'bg-card border-red-500/20 text-red-500'}`}>
-                                 {notification.type === 'success' ? <Sparkles size={14}/> : <X size={14}/>}
-                                 {notification.msg}
-                            </div>
-                        )}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            
-            {graphData.nodes.length > 0 ? (
-                <ForceGraph2D
-                    ref={fgRef}
-                    width={dimensions.width}
-                    height={dimensions.height}
-                    graphData={graphData}
-                    nodeColor={(node: any) => node.color || "#334155"} // Slate-700 default
-                    nodeLabel="name"
-                    backgroundColor="#ffffff" // Explicit white background
-                    linkColor={() => "rgba(100, 116, 139, 0.3)"} // Slightly darker slate
-                    linkWidth={1}
-                    nodeRelSize={4}
-                    onNodeClick={handleNodeClick}
-                    enableNodeDrag={false}
-                    nodePointerAreaPaint={(node: any, color, ctx) => {
-                        const r = 4;
-                        ctx.fillStyle = color;
-                        ctx.beginPath();
-                        ctx.arc(node.x, node.y, r + 4, 0, 2 * Math.PI, false);
-                        ctx.fill();
-                    }}
-                    nodeCanvasObject={(node: any, ctx, globalScale) => {
-                        const r = 4;
-                        const fontSize = 4; 
-                        
-                        // Node Circle
-                        ctx.beginPath();
-                        ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
-                        ctx.fillStyle = node.color || '#334155';
-                        ctx.fill();
-                        
-                        // Selection Ring
-                        if (node === selectedNode) {
-                            ctx.beginPath();
-                            ctx.arc(node.x, node.y, r + 2, 0, 2 * Math.PI, false);
-                            ctx.strokeStyle = node.color;
-                            ctx.lineWidth = 1;
-                            ctx.stroke();
-                        }
+            {/* CENTER: GRAPH CANVAS */}
+            <div className="flex-1 relative bg-slate-50 overflow-hidden flex flex-col" ref={graphContainerRef}>
+                {/* Stats Overlay */}
+                <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur border border-slate-200 px-3 py-1.5 rounded-full shadow-sm text-xs font-mono text-slate-500">
+                    {graphData.links.length} connections
+                </div>
 
-                        // Label
-                        if (globalScale > 1.5 || node === selectedNode) {
-                            ctx.font = `${fontSize}px Inter, sans-serif`;
+                 {/* Notifications */}
+                 <AnimatePresence>
+                    {notification && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className={`absolute top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium shadow-lg border bg-white ${
+                                notification.type === 'success' ? 'text-green-600 border-green-200' : 'text-red-600 border-red-200'
+                            }`}
+                        >
+                            {notification.msg}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Force Graph */}
+                <div className="flex-1 w-full h-full cursor-crosshair">
+                   <ForceGraph2D
+                        ref={fgRef}
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        graphData={graphData}
+                        
+                        backgroundColor="#f8fafc" // Slate-50 main bg
+                        nodeLabel="name"
+                        nodeColor={(node: any) => node.color || "#64748b"}
+                        linkColor={() => "#cbd5e1"}
+                        
+                        // Increase interaction sizes
+                        nodeRelSize={6}
+                        linkWidth={1.5}
+                        
+                        // CONNECT GRAPH CLICKS TO LIST SELECTION
+                        onNodeClick={handleNodeSelect}
+                        
+                        // Always show text
+                        nodeCanvasObject={(node: any, ctx, globalScale) => {
+                            const label = node.name;
+                            const fontSize = 12/globalScale;
+                            const r = 6; 
+
+                            // Node
+                            ctx.beginPath();
+                            ctx.arc(node.x, node.y, r, 0, 2 * Math.PI, false);
+                            ctx.fillStyle = node.color || "#64748b";
+                            ctx.fill();
+
+                            // Selection Halo
+                            if (node.id === selectedNode?.id) {
+                                ctx.beginPath();
+                                ctx.arc(node.x, node.y, r + 4, 0, 2 * Math.PI, false);
+                                ctx.strokeStyle = node.color || "#2563eb";
+                                ctx.lineWidth = 2;
+                                ctx.stroke();
+                            }
+
+                            // Text
+                            ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
-                            ctx.fillStyle = '#475569'; // Slate 600 (Darker for light theme)
-                            ctx.fillText(node.name, node.x, node.y + r + fontSize);
-                        }
-                    }} 
-                />
-            ) : (
-                <div className="flex flex-col items-center justify-center h-full text-text-secondary">
-                    <div className="flex items-center gap-2">
-                         <Network size={20} className="animate-pulse opacity-50" />
-                         <span className="text-sm">Loading Cortex...</span>
-                    </div>
+                            ctx.fillStyle = '#1e293b'; // Slate-800
+                            ctx.fillText(label, node.x, node.y + r + fontSize); 
+                        }}
+                    />
                 </div>
-            )}
+            </div>
 
-            {/* Side Panel - Clean Professional */}
+            {/* RIGHT SIDEBAR: DETAILS (Collapsible) */}
             <AnimatePresence>
                 {selectedNode && (
                     <motion.div 
-                        initial={{ x: "100%" }}
-                        animate={{ x: 0 }}
-                        exit={{ x: "100%" }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="absolute top-0 right-0 bottom-0 w-[450px] bg-card border-l border-border shadow-2xl z-20 flex flex-col"
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 600, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="border-l border-border bg-card z-20 flex flex-col overflow-hidden shadow-xl"
                     >
-                        {/* Header */}
-                        <div className="p-6 border-b border-border flex justify-between items-start">
+                        {/* Detail Header */}
+                        <div className="p-5 border-b border-border flex justify-between items-start bg-secondary/5 min-w-[600px]">
                             <div>
-                                <h2 className="text-xl font-semibold text-primary leading-tight">{selectedNode.name}</h2>
+                                <h3 className="text-xl font-bold text-primary leading-tight pr-4 break-words w-[500px]">{selectedNode.name}</h3>
                                 <div className="flex items-center gap-2 mt-2">
-                                    <span style={{ backgroundColor: selectedNode.color }} className="w-2 h-2 rounded-full"/>
-                                    <span className="text-xs text-text-secondary uppercase tracking-wide">{selectedNode.group}</span>
+                                     <span className="w-2 h-2 rounded-full" style={{ background: selectedNode.color }}/>
+                                     <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">{selectedNode.group}</span>
                                 </div>
                             </div>
-                            <button onClick={() => setSelectedNode(null)} className="text-text-secondary hover:text-primary transition-colors">
-                                <X size={20} />
+                            <button onClick={() => setSelectedNode(null)} className="text-text-secondary hover:text-primary p-1 hover:bg-secondary rounded">
+                                <X size={20}/>
                             </button>
                         </div>
 
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-6">
-                            {/* Properties */}
-                            <div className="grid grid-cols-2 gap-4 mb-8 text-sm">
-                                <div>
-                                    <span className="block text-text-secondary text-xs mb-1">Created</span>
-                                    <span className="text-primary font-mono text-xs">{selectedNode.created}</span>
+                        {/* Detail Body */}
+                        <div className="flex-1 overflow-y-auto p-6 min-w-[600px]">
+                            {/* Tags */}
+                             {selectedNode.tags && (
+                                <div className="flex flex-wrap gap-1.5 mb-6">
+                                     {String(selectedNode.tags).replace(/[\[\]']/g, '').split(',').filter(t=>t.trim()).map(t => (
+                                         <span key={t} className="text-xs font-mono text-accent bg-accent/5 px-2 py-1 rounded border border-accent/20">#{t.trim()}</span>
+                                     ))}
                                 </div>
-                                <div>
-                                    <span className="block text-text-secondary text-xs mb-1">Tags</span>
-                                    <div className="flex flex-wrap gap-1">
-                                        {selectedNode.tags && String(selectedNode.tags).replace(/[\[\]']/g, '').split(',').map((tag:string) => {
-                                            const t = tag.trim();
-                                            if(!t) return null;
-                                            return <span key={t} className="px-1.5 py-0.5 bg-secondary text-text-secondary rounded text-[10px]">{t}</span>
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
+                             )}
 
-                            {/* Body */}
-                            {isEditing ? (
-                                <textarea 
-                                    className="w-full h-96 bg-secondary p-4 rounded-md border border-border focus:border-accent text-sm font-mono resize-none outline-none text-slate-800"
-                                    value={editContent}
-                                    onChange={e => setEditContent(e.target.value)}
-                                    autoFocus
-                                />
-                            ) : (
-                                <div className="prose prose-sm prose-slate max-w-none text-slate-800 prose-ul:list-disc prose-ol:list-decimal prose-ul:ml-4 prose-ol:ml-4 prose-task-list:list-none prose-checkbox:cursor-pointer">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedNode.summary}</ReactMarkdown>
-                                </div>
-                            )}
+                            <div className="prose prose-sm prose-slate max-w-none text-text-secondary">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedNode.summary}</ReactMarkdown>
+                            </div>
                         </div>
 
-                        {/* Footer */}
-                        <div className="p-4 border-t border-border bg-secondary/10 flex justify-between items-center">
-                            {isEditing ? (
-                                <div className="flex gap-2 w-full justify-end">
-                                    <button onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-primary">Cancel</button>
-                                    <button onClick={handleSave} className="px-3 py-1.5 text-xs font-medium bg-primary text-white rounded-md flex items-center gap-2 hover:bg-primary-hover">
-                                        <Save size={12}/> Save
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2 w-full justify-end">
-                                    <button onClick={() => setNotification({ type: 'confirm', msg: '' })} className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors">
-                                        Delete
-                                    </button>
-                                    <button onClick={() => { setEditContent(selectedNode.summary); setIsEditing(true); }} className="px-3 py-1.5 text-xs font-medium bg-secondary hover:bg-border text-primary rounded-md transition-colors flex items-center gap-2">
-                                        <Edit2 size={12}/> Edit
-                                    </button>
-                                </div>
-                            )}
+                        {/* Detail Footer */}
+                        <div className="p-4 border-t border-border bg-secondary/5 min-w-[600px] flex justify-between items-center">
+                            <div className="flex gap-3 w-full">
+                                <button onClick={handleDelete} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2">
+                                    <Trash2 size={16}/> Delete
+                                </button>
+                                <div className="flex-1"/>
+                                {/* Edit functionality removed as per design decision */}
+                            </div>
                         </div>
                     </motion.div>
                 )}

@@ -47,8 +47,8 @@ class BrainAgent:
         ### OUTPUT JSON FORMAT
         Return ONLY valid JSON.
         CRITICAL FORMATTING RULES:
-        1. You MUST escape all newlines in strings as "\\n". ({ "summary": "Line1\\nLine2" })
-        2. You MUST escape all double quotes in strings as "\\\"". ({ "code": "printf(\\\"hello\\\")" })
+        1. You MUST escape all newlines in strings as "\\n". ({{ "summary": "Line1\\nLine2" }})
+        2. You MUST escape all double quotes in strings as "\\\"". ({{ "code": "printf(\\\"hello\\\")" }})
         3. Do not print raw newlines or raw tabs inside the JSON values.
         
         {{

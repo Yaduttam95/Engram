@@ -22,9 +22,9 @@ class Settings(BaseSettings):
         
     def load_from_json(self):
         """Override with JSON config if exists"""
-        if self.config_file.exists():
-            import json
-            try:
+        try:
+            if self.config_file.exists():
+                import json
                 with open(self.config_file, "r") as f:
                     data = json.load(f)
                     if "vault_path" in data:
@@ -33,9 +33,9 @@ class Settings(BaseSettings):
                         self.chat_model = data["chat_model"]
                     if "embed_model" in data:
                         self.embed_model = data["embed_model"]
-            except Exception as e:
-                import logging
-                logging.getLogger(__name__).warning(f"Failed to load config.json: {e}")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to load config.json: {e}")
 
 # Create Singleton
 settings = Settings()
